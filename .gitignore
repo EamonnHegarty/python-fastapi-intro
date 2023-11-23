@@ -1,0 +1,8 @@
+# python
+.venv
+venv
+__pycache__/
+.pytest_cache
+server/session_data
+server/local_temp_files
+server/app.log
