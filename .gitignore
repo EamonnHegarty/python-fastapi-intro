@@ -1,3 +1,6 @@
+# production
+.env
+
 # python
 .venv
 venv
