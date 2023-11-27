@@ -1,18 +1,33 @@
 from typing import Optional
-from fastapi import FastAPI, Response, status, HTTPException
+from fastapi import FastAPI, Response, status, HTTPException, Depends
 from fastapi.params import Body
 from pydantic import BaseModel
 from random import randrange
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import time
+from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
+from . import models
+from .database import engine, SessionLocal
+
+models.Base.metadata.create_all(bind=engine)
 
 load_dotenv()
 
 # uvicorn app.main:app --reload
 app = FastAPI()
+
+
+# Databse dependancy
+def get_db():
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # like typescript giving it a type
@@ -39,28 +54,33 @@ while True:
         print(f"Error: {error}")
         time.sleep(2)
 
-my_posts = [
-    {"title": "title of post 1", "content": "content of post 1", "id": 1},
-    {"title": "title of post 2", "content": "content of post 1", "id": 2},
-]
+# my_posts = [
+#     {"title": "title of post 1", "content": "content of post 1", "id": 1},
+#     {"title": "title of post 2", "content": "content of post 1", "id": 2},
+# ]
 
 
-def find_post(id):
-    for p in my_posts:
-        if p["id"] == id:
-            return p
+# def find_post(id):
+#     for p in my_posts:
+#         if p["id"] == id:
+#             return p
 
 
-def find_index_post(id):
-    # enumerate gives index
-    for i, p in enumerate(my_posts):
-        if p["id"] == id:
-            return i
+# def find_index_post(id):
+#     # enumerate gives index
+#     for i, p in enumerate(my_posts):
+#         if p["id"] == id:
+#             return i
 
 
 @app.get("/")
 def root():
     return {"message": "welcome to my python api"}
+
+
+@app.get("/sql")
+def test_posts(db: Session = Depends(get_db)):
+    return {"status": "success"}
 
 
 @app.get("/posts")
