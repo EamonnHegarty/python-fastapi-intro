@@ -17,6 +17,7 @@ models.Base.metadata.create_all(bind=engine)
 load_dotenv()
 
 # uvicorn app.main:app --reload
+#  source venv/Scripts/activate
 app = FastAPI()
 
 
@@ -53,34 +54,44 @@ def root():
 @app.get("/sql")
 def test_posts(db: Session = Depends(get_db)):
     posts = db.query(models.Post).all()
+
     return {"data": posts}
 
 
 @app.get("/posts")
-def get_posts():
-    cursor.execute("""SELECT * FROM posts""")
-    posts = cursor.fetchall()
+def get_posts(db: Session = Depends(get_db)):
+    # cursor.execute("""SELECT * FROM posts""")
+    # posts = cursor.fetchall()
+    posts = db.query(models.Post).all()
+
     return {"data": posts}
 
 
 @app.post("/posts", status_code=status.HTTP_201_CREATED)
 # Extract all the fields from body stored as a python dict and store it in post
-def create_posts(post: Post):
-    cursor.execute(
-        """INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *""",
-        (post.title, post.content, post.published),
-    )
-    new_post = cursor.fetchone()
+def create_posts(post: Post, db: Session = Depends(get_db)):
+    # cursor.execute(
+    #     """INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *""",
+    #     (post.title, post.content, post.published),
+    # )
+    # new_post = cursor.fetchone()
 
-    conn.commit()
+    # conn.commit()
+
+    # ** un packs the dict like ... in javascript, maybe
+    new_post = models.Post(**post.dict())
+
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
     return {"data": new_post}
 
 
 @app.get("/posts/{id}")
-def get_post(id: int):
-    cursor.execute("""SELECT * FROM posts WHERE id = %s  """, (str(id),))
-    post = cursor.fetchone()
-
+def get_post(id: int, db: Session = Depends(get_db)):
+    # cursor.execute("""SELECT * FROM posts WHERE id = %s  """, (str(id),))
+    # post = cursor.fetchone()
+    post = db.query(models.Post).filter(models.Post.id == id).first()
     if not post:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -90,34 +101,47 @@ def get_post(id: int):
 
 
 @app.delete("/posts/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_post(id: int):
-    cursor.execute("""DELETE FROM posts WHERE id = %s RETURNING *""", (str(id),))
-    deleted_post = cursor.fetchone()
-    conn.commit()
+def delete_post(id: int, db: Session = Depends(get_db)):
+    # cursor.execute("""DELETE FROM posts WHERE id = %s RETURNING *""", (str(id),))
+    # deleted_post = cursor.fetchone()
+    # conn.commit()
 
-    if deleted_post == None:
+    post = db.query(models.Post).filter(models.Post.id == id)
+
+    if post.first() == None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"post with {id} does not exist",
         )
+
+    post.delete(synchronize_session=False)
+    db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.put("/posts/{id}")
-def update_post(id: int, post: Post):
-    cursor.execute(
-        """UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *""",
-        (post.title, post.content, post.published, (str(id))),
-    )
+def update_post(id: int, updated_post: Post, db: Session = Depends(get_db)):
+    # cursor.execute(
+    #     """UPDATE posts SET title = %s, content = %s, published = %s WHERE id = %s RETURNING *""",
+    #     (post.title, post.content, post.published, (str(id))),
+    # )
 
-    updated_post = cursor.fetchone()
-    conn.commit()
+    # updated_post = cursor.fetchone()
+    # conn.commit()
 
-    if updated_post == None:
+    post_query = db.query(models.Post).filter(models.Post.id == id)
+
+    post = post_query.first()
+
+    if post == None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"post with {id} does not exist",
         )
 
-    return {"updated post": updated_post}
+    post_query.update(updated_post.dict(), synchronize_session=False)
+
+    db.commit()
+
+    return {"updated post": post_query.first()}
